@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User management
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  name       String
+  password   String
+  role       UserRole
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  profile UserProfile?
+
+  // Relations
+  enrollments      Enrollment[]
+  classesAsTeacher Class[] @relation("teacherClasses")
+  assignments      Assignment[]
+  sessions         StudySession[]
+  analytics        AnalyticsData[]
+  userProgress     UserProgress[]
+  assessments      Assessment[]
+}
+
+model UserProfile {
+  id       String   @id @default(cuid())
+  userId   String   @unique
+  grade    String?
+  board    String?
+  subjects String[]
+  avatar   String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum UserRole {
+  student
+  teacher
+  admin
+}
+
+// Academic content
+model Board {
+  id          String   @id @default(cuid())
+  name        String
+  code        String   @unique
+  description String?
+
+  topics    Topic[]
+  questions Question[]
+}
+
+model Topic {
+  id          String   @id @default(cuid())
+  boardId     String
+  subject     String
+  name        String
+  description String?
+  difficultyRange Json?
+
+  board        Board          @relation(fields: [boardId], references: [id])
+  questions    Question[]
+  userProgress UserProgress[]
+  assessments  Assessment[]
+  studySessions StudySession[]
+}
+
+model DifficultyLevel {
+  id          String   @id @default(cuid())
+  name        String
+  score       Int      // 1-5 scale
+  description String?
+
+  questions Question[]
+}
+
+model Question {
+  id              String   @id @default(cuid())
+  topicId         String
+  boardId         String
+  difficultyId    String
+  type            QuestionType
+  content         String
+  correctAnswer   String
+  explanation     String
+  hint            String?
+  difficultyScore Int
+  tags            String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  options              QuestionOption[]
+  topic                Topic                 @relation(fields: [topicId], references: [id])
+  board                Board                 @relation(fields: [boardId], references: [id])
+  difficulty           DifficultyLevel       @relation(fields: [difficultyId], references: [id])
+  assessmentQuestions  AssessmentQuestion[]
+}
+
+model QuestionOption {
+  id          String   @id @default(cuid())
+  questionId  String
+  text        String
+  isCorrect   Boolean
+
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+enum QuestionType {
+  multiple_choice
+  fill_blank
+  numerical
+}
+
+// Learning progress
+model Assessment {
+  id             String   @id @default(cuid())
+  userId         String
+  topicId        String?
+  score          Int
+  totalQuestions Int
+  completedAt    DateTime @default(now())
+  timeSpent      Int
+
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic          Topic?               @relation(fields: [topicId], references: [id])
+  questions      AssessmentQuestion[]
+}
+
+model AssessmentQuestion {
+  id           String   @id @default(cuid())
+  assessmentId String
+  questionId   String
+  userAnswer   String
+  isCorrect    Boolean
+  timeSpent    Int
+
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  question     Question   @relation(fields: [questionId], references: [id])
+}
+
+model UserProgress {
+  id                String   @id @default(cuid())
+  userId            String
+  topicId           String
+  questionsAnswered Int
+  correctAnswers    Int
+  streak            Int
+  lastQuestionDate  DateTime?
+  nextReviewDate    DateTime?
+  masteryLevel      Int      // 0-100
+  totalTimeSpent    Int
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id])
+}
+
+model StudySession {
+  id                 String      @id @default(cuid())
+  userId             String
+  topicId            String
+  questionsAttempted Int
+  correctAnswers     Int
+  startTime          DateTime
+  endTime            DateTime?
+  sessionType        SessionType
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic Topic @relation(fields: [topicId], references: [id])
+}
+
+enum SessionType {
+  diagnostic
+  practice
+  review
+}
+
+// Social features
+model Class {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  teacherId   String
+  code        String   @unique
+  maxStudents Int?
+  createdAt   DateTime @default(now())
+
+  teacher     User         @relation("teacherClasses", fields: [teacherId], references: [id])
+  enrollments Enrollment[]
+  assignments Assignment[]
+}
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  userId     String
+  classId    String
+  status     EnrollmentStatus
+  enrolledAt DateTime         @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+}
+
+enum EnrollmentStatus {
+  active
+  inactive
+  completed
+}
+
+model Assignment {
+  id          String           @id @default(cuid())
+  teacherId   String
+  classId     String
+  title       String
+  description String?
+  questionIds String[]
+  dueDate     DateTime?
+  createdAt   DateTime         @default(now())
+  status      AssignmentStatus
+
+  teacher User  @relation(fields: [teacherId], references: [id])
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+}
+
+enum AssignmentStatus {
+  draft
+  published
+  closed
+}
+
+model AnalyticsData {
+  id                String   @id @default(cuid())
+  userId            String
+  date              DateTime @default(now())
+  questionsAnswered Int
+  correctAnswers    Int
+  averageTime       Int
+  streakCount       Int
+  topicPerformance  Json
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
